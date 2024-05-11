@@ -164,5 +164,4 @@ config.py
 logs/
 backups/
 .vscode/settings.json
-main.py
 db/sqlite2.db
