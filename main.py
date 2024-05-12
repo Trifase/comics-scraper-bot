@@ -9,6 +9,7 @@ import httpx
 from bs4 import BeautifulSoup
 from telegram import (
     LinkPreviewOptions,
+    Message,
     Update,
 )
 from telegram.ext import (
@@ -19,7 +20,7 @@ from telegram.ext import (
     Defaults,
 )
 
-from config import ID_COMICS, TOKEN
+from config import ID_COMICS, TOKEN, ID_BOTCENTRAL
 
 # Logging setup
 logger = logging.getLogger()
@@ -45,18 +46,15 @@ aps_logger.setLevel(logging.WARNING)
 
 locale.setlocale(locale.LC_TIME, "it_IT.UTF-8")
 
+async def send_bot_central(context: ContextTypes.DEFAULT_TYPE, text: str) -> Message:
+    return await context.bot.send_message(chat_id=ID_BOTCENTRAL, text=text, parse_mode="HTML")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
     tb_string = "".join(tb_list)
-    logging.info(f"È accaduto un errore! {tb_list[2]}\n{tb_list[1]}")
+    logging.info(f"È accaduto un errore!\n============\n{tb_list[-2]}{tb_list[-1]}============")
 
-    ID_BOTCENTRAL = -1001180175690
-    await context.bot.send_message(
-        chat_id=ID_BOTCENTRAL,
-        text=f'<pre><code class="language-python">{tb_string[:4000]}</code></pre>',
-        parse_mode="HTML",
-    )
+    await send_bot_central(context, f'<pre><code class="language-python">{tb_string[:4000]}</code></pre>')
 
 
 async def post_init(app: Application) -> None:
@@ -71,25 +69,20 @@ async def post_init(app: Application) -> None:
 
 async def scrape_comics(context: ContextTypes.DEFAULT_TYPE) -> None:
     logging.info("It's scraping' time.")
-    text, url = get_comic("smbc")
-    await send_if_not_already_sent(context, "smbc", url, text)
 
-    text, url = get_comic("pbf")
-    await send_if_not_already_sent(context, "pbf", url, text)
+    comics = ['smbc', 'pbf', 'octopuns', 'poorlydrawnlines', 'xkcd']
+    comics_spoilers = ['oglaf']
 
-    text, url = get_comic("octopuns")
-    await send_if_not_already_sent(context, "octopuns", url, text)
+    for comic in comics:
+        text, url = get_comic(comic)
+        await send_if_not_already_sent(context, comic, url, text)
 
-    text, url = get_comic("poorlydrawnlines")
-    await send_if_not_already_sent(context, "poorlydrawnlines", url, text)
+    for comic in comics_spoilers:
+        text, url = get_comic(comic)
+        await send_if_not_already_sent(context, comic, url, text, spoiler=True)
 
-    text, url = get_comic("xkcd")
-    await send_if_not_already_sent(context, "xkcd", url, text)
-
-    text, url = get_comic("oglaf")
-    await send_if_not_already_sent(context, "oglaf", url, text, spoiler=True)
     logging.info("Scraping completed.")
-    logging.info("========================")
+    logging.info("========================\n")
 
 
 def get_comic(comic):
@@ -170,10 +163,12 @@ async def send_if_not_already_sent(context: ContextTypes.DEFAULT_TYPE, comic, ur
 
     logging.info(f"[{comic}] Invio.")
     await context.bot.send_photo(ID_COMICS, url, caption=text, parse_mode="HTML", has_spoiler=spoiler)
+    await send_bot_central(context, f'[{comic}] Ho inviato un <a href="{url}">nuovo comic!</a>')
 
 
 async def manual_scrape_comics(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     return await scrape_comics(context)
+
 
 
 def main():
